@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Traffic Density Estimation & Signal Control</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+
+</head>
+<body>
+
+<header class="header">
+  <div class="header-logo">
+    <div class="logo-icon">🚦</div>
+    <div class="logo-text">
+      <h1>AI Traffic Control System</h1>
+      <p>Real-Time Density Estimation & Signal Optimization</p>
+    </div>
+  </div>
+  <div class="header-badges">
+    <div class="badge badge-green"><div class="dot-pulse"></div> SYSTEM ONLINE</div>
+    <div class="badge badge-blue">⚡ YOLOv8x</div>
+    <div class="badge badge-ai">🤖 AI Powered</div>
+  </div>
+</header>
+
+<div class="status-bar">
+  <div class="status-item">📡 Feed: <span class="status-value" id="feedStatus">SIMULATING</span></div>
+  <div class="status-item">🎞️ FPS: <span class="status-value" id="fpsDisplay">30</span></div>
+  <div class="status-item">⚙️ Model: <span class="status-value">YOLOv8x-Traffic</span></div>
+  <div class="status-item">🧠 mAP@0.5: <span class="status-value">94.2%</span></div>
+  <div class="status-item">⏱️ Inference: <span class="status-value" id="latencyDisplay">11ms</span></div>
+  <div class="status-item">🖥️ GPU: <span class="status-value" id="gpuUsage">71%</span></div>
+  <div class="status-item" style="margin-left:auto;">🕐 <span id="clockDisplay" class="status-value"></span></div>
+</div>
+
+<div class="tabs-nav">
+  <button class="tab-btn active" onclick="switchTab('estimation')">🎥 Live Estimation</button>
+  <button class="tab-btn" onclick="switchTab('analysis')">📊 Traffic Analysis</button>
+  <button class="tab-btn" onclick="switchTab('signal')">🚦 Signal Control</button>
+  <button class="tab-btn" onclick="switchTab('sustainability')">🌿 Sustainability</button>
+  <button class="tab-btn" onclick="switchTab('reports')">📋 Reports</button>
+</div>
+
+<!-- ─── TAB 1: LIVE ESTIMATION ─── -->
+<div id="tab-estimation" class="tab-content active">
+  <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;">
+    <div>
+      <div class="card-header" style="margin-bottom:12px;">
+        <div>
+          <div class="card-title">🎥 Live Detection Feed</div>
+          <div class="card-subtitle">YOLOv8x with NMS · Perspective-corrected bounding boxes · Per-lane tracking</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div id="densityBadge" class="density-badge density-medium">MEDIUM</div>
+          <label for="videoInput" class="btn-primary" style="cursor:pointer;">📁 Upload Video</label>
+          <input type="file" id="videoInput" accept="video/*" onchange="loadVideo(event)">
+        </div>
+      </div>
+
+      <div class="video-container" id="videoContainer">
+        <!-- Scene canvas renders road + vehicles -->
+        <canvas id="sceneCanvas"></canvas>
+        <!-- Overlay with bboxes drawn on top of scene OR real video -->
+        <video id="videoElement" loop muted style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:none;"></video>
+        <canvas id="detectionCanvas"></canvas>
+
+        <div class="video-overlay-label" id="liveLabel">
+          <div class="dot-pulse"></div> <span id="feedModeLabel">DEMO · AI SIMULATION</span>
+        </div>
+        <div class="fps-display" id="fpsBadge">FPS: <span id="fpsCounter">30</span> | Frame <span id="frameCount">0</span></div>
+        <div class="density-overlay">
+          <div class="density-meter">
+            <div class="dm-label">VEHICLES IN FRAME</div>
+            <div class="dm-value" id="dmVehicles" style="color:#60a5fa;">0</div>
+          </div>
+          <div class="density-meter">
+            <div class="dm-label">DENSITY INDEX</div>
+            <div class="dm-value" id="dmDensity" style="color:#fbbf24;">0%</div>
+          </div>
+          <div class="density-meter">
+            <div class="dm-label">AVG SPEED</div>
+            <div class="dm-value" id="dmSpeed" style="color:#34d399;">0 km/h</div>
+          </div>
+          <div class="density-meter">
+            <div class="dm-label">OCCUPANCY</div>
+            <div class="dm-value" id="dmOccupancy" style="color:#a78bfa;">0%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats bar -->
+      <div class="card" style="margin-top:16px;background:linear-gradient(135deg,rgba(37,99,235,0.08),rgba(16,185,129,0.08));border-color:rgba(37,99,235,0.25);">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">TOTAL DETECTED (SESSION)</div>
+            <div style="font-size:48px;font-weight:900;color:white;line-height:1;font-family:monospace;" id="totalCountBig">0</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">cumulative vehicle count</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div style="text-align:center;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-secondary);">CONGESTION</div>
+              <div style="font-size:22px;font-weight:800;color:#f87171;font-family:monospace;" id="congestionLevel">MOD</div>
+            </div>
+            <div style="text-align:center;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-secondary);">THROUGHPUT</div>
+              <div style="font-size:22px;font-weight:800;color:#60a5fa;font-family:monospace;" id="throughput">0<span style="font-size:11px;font-weight:400"> v/min</span></div>
+            </div>
+            <div style="text-align:center;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-secondary);">UPTIME</div>
+              <div style="font-size:22px;font-weight:800;color:#34d399;font-family:monospace;" id="uptimeDisplay">00:00</div>
+            </div>
+            <div style="text-align:center;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-secondary);">LANES ACTIVE</div>
+              <div style="font-size:22px;font-weight:800;color:#a78bfa;font-family:monospace;" id="lanesActive">4</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div>
+      <div class="card-header" style="margin-bottom:12px;">
+        <div class="card-title">🚗 Vehicle Detection Panel</div>
+        <span style="font-size:11px;color:var(--text-muted);">Live · Per-type</span>
+      </div>
+      <div class="detection-panel">
+        <div class="vehicle-row">
+          <div class="vehicle-dot" style="background:#3b82f6;box-shadow:0 0 8px #3b82f6;"></div>
+          <div class="vehicle-info">
+            <div class="vehicle-name" style="color:#60a5fa;">🚗 Cars</div>
+            <div class="vehicle-bar-bg"><div class="vehicle-bar" id="barCar" style="background:#3b82f6;width:65%;"></div></div>
+            <div class="vehicle-pct" id="pctCar">65% of total</div>
+          </div>
+          <div class="vehicle-count" style="color:#60a5fa;" id="countCar">0</div>
+        </div>
+        <div class="vehicle-row">
+          <div class="vehicle-dot" style="background:#ef4444;box-shadow:0 0 8px #ef4444;"></div>
+          <div class="vehicle-info">
+            <div class="vehicle-name" style="color:#f87171;">🚛 Trucks</div>
+            <div class="vehicle-bar-bg"><div class="vehicle-bar" id="barTruck" style="background:#ef4444;width:15%;"></div></div>
+            <div class="vehicle-pct" id="pctTruck">15% of total</div>
+          </div>
+          <div class="vehicle-count" style="color:#f87171;" id="countTruck">0</div>
+        </div>
+        <div class="vehicle-row">
+          <div class="vehicle-dot" style="background:#f97316;box-shadow:0 0 8px #f97316;"></div>
+          <div class="vehicle-info">
+            <div class="vehicle-name" style="color:#fb923c;">🚌 Buses</div>
+            <div class="vehicle-bar-bg"><div class="vehicle-bar" id="barBus" style="background:#f97316;width:8%;"></div></div>
+            <div class="vehicle-pct" id="pctBus">8% of total</div>
+          </div>
+          <div class="vehicle-count" style="color:#fb923c;" id="countBus">0</div>
+        </div>
+        <div class="vehicle-row">
+          <div class="vehicle-dot" style="background:#eab308;box-shadow:0 0 8px #eab308;"></div>
+          <div class="vehicle-info">
+            <div class="vehicle-name" style="color:#fde047;">🏍️ Motorcycles</div>
+            <div class="vehicle-bar-bg"><div class="vehicle-bar" id="barMoto" style="background:#eab308;width:9%;"></div></div>
+            <div class="vehicle-pct" id="pctMoto">9% of total</div>
+          </div>
+          <div class="vehicle-count" style="color:#fde047;" id="countMoto">0</div>
+        </div>
+        <div class="vehicle-row">
+          <div class="vehicle-dot" style="background:#10b981;box-shadow:0 0 8px #10b981;"></div>
+          <div class="vehicle-info">
+            <div class="vehicle-name" style="color:#34d399;">🚲 Bicycles</div>
+            <div class="vehicle-bar-bg"><div class="vehicle-bar" id="barBike" style="background:#10b981;width:3%;"></div></div>
+            <div class="vehicle-pct" id="pctBike">3% of total</div>
+          </div>
+          <div class="vehicle-count" style="color:#34d399;" id="countBike">0</div>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+      <div class="section-title">🎯 Detection Confidence (Per Class)</div>
+      <div style="display:grid;gap:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;border:1px solid var(--border);">
+          <span style="color:var(--text-secondary);">🚗 Car</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="background:rgba(255,255,255,0.06);width:80px;height:4px;border-radius:2px;overflow:hidden;"><div id="confBarCar" style="height:4px;background:#3b82f6;border-radius:2px;width:96%;transition:width .5s;"></div></div>
+            <span style="color:#34d399;font-weight:600;font-family:monospace;" id="confCar">96.4%</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;border:1px solid var(--border);">
+          <span style="color:var(--text-secondary);">🚛 Truck</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="background:rgba(255,255,255,0.06);width:80px;height:4px;border-radius:2px;overflow:hidden;"><div id="confBarTruck" style="height:4px;background:#ef4444;border-radius:2px;width:93%;transition:width .5s;"></div></div>
+            <span style="color:#34d399;font-weight:600;font-family:monospace;" id="confTruck">93.1%</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;border:1px solid var(--border);">
+          <span style="color:var(--text-secondary);">🚌 Bus</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="background:rgba(255,255,255,0.06);width:80px;height:4px;border-radius:2px;overflow:hidden;"><div id="confBarBus" style="height:4px;background:#f97316;border-radius:2px;width:97%;transition:width .5s;"></div></div>
+            <span style="color:#34d399;font-weight:600;font-family:monospace;" id="confBus">97.8%</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;border:1px solid var(--border);">
+          <span style="color:var(--text-secondary);">🏍️ Moto</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="background:rgba(255,255,255,0.06);width:80px;height:4px;border-radius:2px;overflow:hidden;"><div id="confBarMoto" style="height:4px;background:#eab308;border-radius:2px;width:87%;transition:width .5s;"></div></div>
+            <span style="color:#fbbf24;font-weight:600;font-family:monospace;" id="confMoto">87.2%</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;border:1px solid var(--border);">
+          <span style="color:var(--text-secondary);">🚲 Bicycle</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="background:rgba(255,255,255,0.06);width:80px;height:4px;border-radius:2px;overflow:hidden;"><div id="confBarBike" style="height:4px;background:#10b981;border-radius:2px;width:84%;transition:width .5s;"></div></div>
+            <span style="color:#fbbf24;font-weight:600;font-family:monospace;" id="confBike">84.6%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+      <div class="section-title">⚡ System Metrics</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center;">
+          <div style="color:var(--text-secondary);margin-bottom:4px;">GPU</div>
+          <div style="color:#60a5fa;font-weight:700;font-size:16px;font-family:monospace;" id="gpuDisp">71%</div>
+        </div>
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center;">
+          <div style="color:var(--text-secondary);margin-bottom:4px;">Memory</div>
+          <div style="color:#a78bfa;font-weight:700;font-size:16px;font-family:monospace;">6.2 GB</div>
+        </div>
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center;">
+          <div style="color:var(--text-secondary);margin-bottom:4px;">NMS Thresh</div>
+          <div style="color:#fbbf24;font-weight:700;font-size:16px;font-family:monospace;">0.45</div>
+        </div>
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center;">
+          <div style="color:var(--text-secondary);margin-bottom:4px;">Conf Thresh</div>
+          <div style="color:#34d399;font-weight:700;font-size:16px;font-family:monospace;">0.50</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TAB 2: ANALYSIS ─── -->
+<div id="tab-analysis" class="tab-content">
+  <div class="grid-4" style="margin-bottom:20px;">
+    <div class="stat-card blue">
+      <div class="stat-icon">🚗</div>
+      <div class="stat-label">Today's Total Vehicles</div>
+      <div class="stat-value" style="color:#60a5fa;" id="anaTotal">14,827</div>
+      <div class="stat-sub">↑ 8.3% vs yesterday</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-icon">📈</div>
+      <div class="stat-label">Peak Hour Density</div>
+      <div class="stat-value" style="color:#34d399;">87%</div>
+      <div class="stat-sub">At 08:30 AM</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="stat-icon">⚡</div>
+      <div class="stat-label">Processing Speed</div>
+      <div class="stat-value" style="color:#fb923c;">30 FPS</div>
+      <div class="stat-sub">Inference: 11ms avg</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-icon">🎯</div>
+      <div class="stat-label">Detection Accuracy</div>
+      <div class="stat-value" style="color:#a78bfa;">94.2%</div>
+      <div class="stat-sub">mAP@0.5: 0.934</div>
+    </div>
+  </div>
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">📈 Traffic Flow (Real-time)</div><div class="card-subtitle">Vehicles detected per 5s window</div></div></div>
+      <div class="chart-container"><canvas id="flowChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">🥧 Vehicle Composition</div><div class="card-subtitle">Live type distribution</div></div></div>
+      <div class="chart-container"><canvas id="pieChart"></canvas></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <div class="card-title">🔥 Peak Hour Heatmap (7-day)</div>
+      <div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:40px;height:12px;background:linear-gradient(to right,rgba(16,185,129,0.2),#ef4444);border-radius:2px;"></span>Low → High</div>
+    </div>
+    <div id="heatmapContainer"></div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><div class="card-header"><div class="card-title">📉 Density Trend (7 days)</div></div><div class="chart-container"><canvas id="densityChart"></canvas></div></div>
+    <div class="card"><div class="card-header"><div class="card-title">🚀 Speed by Vehicle Type</div></div><div class="chart-container"><canvas id="speedChart"></canvas></div></div>
+  </div>
+</div>
+
+<!-- ─── TAB 3: SIGNAL ─── -->
+<div id="tab-signal" class="tab-content">
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+      <div class="card-header"><div class="card-title">🚦 Intersection Control</div><div class="badge badge-green"><div class="dot-pulse"></div> AUTO MODE</div></div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;grid-template-rows:auto auto auto;max-width:500px;margin:0 auto;">
+        <div></div>
+        <div class="traffic-light-wrapper"><div class="light-direction">NORTH</div><div class="traffic-light" id="lightNorth"><div class="light-bulb red-light" id="nRed"></div><div class="light-bulb yellow-light" id="nYellow"></div><div class="light-bulb green-light" id="nGreen"></div></div></div>
+        <div></div>
+        <div class="traffic-light-wrapper"><div class="light-direction">WEST</div><div class="traffic-light horizontal"><div class="light-bulb red-light" id="wRed"></div><div class="light-bulb yellow-light" id="wYellow"></div><div class="light-bulb green-light" id="wGreen"></div></div></div>
+        <div style="background:#1a1a1a;width:80px;height:80px;display:flex;align-items:center;justify-content:center;border:3px solid #333;border-radius:4px;"><span style="font-size:24px;">✕</span></div>
+        <div class="traffic-light-wrapper"><div class="light-direction">EAST</div><div class="traffic-light horizontal"><div class="light-bulb red-light" id="eRed"></div><div class="light-bulb yellow-light" id="eYellow"></div><div class="light-bulb green-light" id="eGreen"></div></div></div>
+        <div></div>
+        <div class="traffic-light-wrapper"><div class="traffic-light"><div class="light-bulb red-light" id="sRed"></div><div class="light-bulb yellow-light" id="sYellow"></div><div class="light-bulb green-light" id="sGreen"></div></div><div class="light-direction">SOUTH</div></div>
+        <div></div>
+      </div>
+      <div style="text-align:center;margin-top:20px;padding:16px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">CURRENT PHASE</div>
+        <div class="phase-timer" id="phaseTimerDisplay" style="color:var(--accent-green);">00:45</div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;" id="phaseLabel">North-South: GREEN</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+          <button class="control-btn active" id="modeAutoBtn" onclick="setAutoMode(true)">🤖 Auto</button>
+          <button class="control-btn" id="modeManBtn" onclick="setAutoMode(false)">🖐 Manual</button>
+          <button class="control-btn" onclick="skipPhase()">⏭ Skip Phase</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title" style="margin-bottom:12px;">⏱️ AI-Optimized Phase Timing</div>
+        <div class="signal-timing-grid">
+          <div class="signal-timing-card"><div class="signal-direction">NORTH</div><div class="timing-row"><span class="timing-g">●</span><span class="timing-g" id="nGTime">45s</span></div><div class="timing-row"><span class="timing-y">●</span><span class="timing-y">5s</span></div><div class="timing-row"><span class="timing-r">●</span><span class="timing-r">30s</span></div></div>
+          <div class="signal-timing-card"><div class="signal-direction">SOUTH</div><div class="timing-row"><span class="timing-g">●</span><span class="timing-g" id="sGTime">45s</span></div><div class="timing-row"><span class="timing-y">●</span><span class="timing-y">5s</span></div><div class="timing-row"><span class="timing-r">●</span><span class="timing-r">30s</span></div></div>
+          <div class="signal-timing-card"><div class="signal-direction">EAST</div><div class="timing-row"><span class="timing-g">●</span><span class="timing-g" id="eGTime">30s</span></div><div class="timing-row"><span class="timing-y">●</span><span class="timing-y">5s</span></div><div class="timing-row"><span class="timing-r">●</span><span class="timing-r">45s</span></div></div>
+          <div class="signal-timing-card"><div class="signal-direction">WEST</div><div class="timing-row"><span class="timing-g">●</span><span class="timing-g" id="wGTime">30s</span></div><div class="timing-row"><span class="timing-y">●</span><span class="timing-y">5s</span></div><div class="timing-row"><span class="timing-r">●</span><span class="timing-r">45s</span></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">🤖 AI Recommendations</div>
+        <div class="rec-item"><div class="rec-icon">🟢</div><div class="rec-text"><h4>Extend North-South Green Phase</h4><p>High vehicle density detected on N-S axis (18 vehicles). Recommend extending green by 15s.</p></div></div>
+        <div class="rec-item" style="border-left-color:var(--accent-orange);"><div class="rec-icon">⚠️</div><div class="rec-text"><h4>Pedestrian Phase Needed</h4><p>Low vehicle count at East crossing. Consider inserting 12s pedestrian phase.</p></div></div>
+        <div class="rec-item" style="border-left-color:var(--accent-blue);"><div class="rec-icon">📡</div><div class="rec-text"><h4>Adaptive Cycle Optimization</h4><p>AI suggests reducing cycle from 120s → 90s to improve throughput by ~18%.</p></div></div>
+        <div style="margin-top:12px;padding:12px;background:rgba(16,185,129,0.08);border-radius:8px;border:1px solid rgba(16,185,129,0.2);">
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Signal Optimization Score</div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="font-size:28px;font-weight:700;color:var(--accent-green);" id="optScore">87</div>
+            <div style="flex:1;"><div class="progress-bar-bg"><div class="progress-bar-fill" id="optBar" style="width:87%;background:linear-gradient(90deg,var(--accent-green),#34d399);"></div></div><div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Excellent optimization efficiency</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TAB 4: SUSTAINABILITY ─── -->
+<div id="tab-sustainability" class="tab-content">
+  <div class="grid-4" style="margin-bottom:20px;">
+    <div class="stat-card green"><div class="stat-icon">🌿</div><div class="stat-label">CO₂ Reduced Today</div><div class="stat-value" style="color:#34d399;" id="co2Reduced">0</div><div class="stat-sub">kg equivalent</div></div>
+    <div class="stat-card blue"><div class="stat-icon">⛽</div><div class="stat-label">Fuel Saved</div><div class="stat-value" style="color:#60a5fa;" id="fuelSaved">0</div><div class="stat-sub">liters estimated</div></div>
+    <div class="stat-card orange"><div class="stat-icon">⏱️</div><div class="stat-label">Idle Time Reduced</div><div class="stat-value" style="color:#fb923c;">34%</div><div class="stat-sub">vs unoptimized</div></div>
+    <div class="stat-card purple"><div class="stat-icon">🌱</div><div class="stat-label">Trees Equivalent</div><div class="stat-value" style="color:#a78bfa;" id="treesEq">0</div><div class="stat-sub">trees planted equiv</div></div>
+  </div>
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="card" style="text-align:center;">
+      <div class="card-title" style="justify-content:center;margin-bottom:20px;">♻️ Eco Performance Score</div>
+      <div class="eco-score-ring">
+        <svg width="140" height="140" viewBox="0 0 140 140"><circle cx="70" cy="70" r="60" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="12"/><circle cx="70" cy="70" r="60" fill="none" stroke="url(#ecoGrad)" stroke-width="12" stroke-dasharray="377" stroke-dashoffset="75" stroke-linecap="round" id="ecoCircle"/><defs><linearGradient id="ecoGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style="stop-color:#10b981"/><stop offset="100%" style="stop-color:#34d399"/></linearGradient></defs></svg>
+        <div class="eco-score-center"><div class="eco-score-value" id="ecoScore">80</div><div class="eco-score-label">/ 100</div></div>
+      </div>
+      <div style="margin-top:16px;font-size:13px;color:var(--text-secondary);">Excellent sustainability performance</div>
+      <div style="margin-top:20px;text-align:left;">
+        <div class="progress-bar-container"><div class="progress-bar-label"><span>🚗 Private Vehicles</span><span>62%</span></div><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:62%;background:var(--car-color);"></div></div></div>
+        <div class="progress-bar-container"><div class="progress-bar-label"><span>🚌 Public Transport</span><span>28%</span></div><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:28%;background:var(--accent-green);"></div></div></div>
+        <div class="progress-bar-container"><div class="progress-bar-label"><span>🚲 Green Transport</span><span>10%</span></div><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:10%;background:#34d399;"></div></div></div>
+      </div>
+    </div>
+    <div class="card"><div class="card-title" style="margin-bottom:16px;">📊 Emission Reduction Chart</div><div class="chart-container-lg"><canvas id="emissionChart"></canvas></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:16px;">🌍 Environmental Impact</div>
+    <div class="grid-4">
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;"><div style="font-size:28px;margin-bottom:6px;">🌡️</div><div style="font-size:22px;font-weight:700;color:#34d399;">2.4°C</div><div style="font-size:11px;color:var(--text-secondary);">Local temp reduction</div></div>
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;"><div style="font-size:28px;margin-bottom:6px;">💨</div><div style="font-size:22px;font-weight:700;color:#60a5fa;">18.7g</div><div style="font-size:11px;color:var(--text-secondary);">NOx reduced per day</div></div>
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;"><div style="font-size:28px;margin-bottom:6px;">⚡</div><div style="font-size:22px;font-weight:700;color:#fbbf24;">124 kWh</div><div style="font-size:11px;color:var(--text-secondary);">Signal energy saved</div></div>
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;"><div style="font-size:28px;margin-bottom:6px;">🏙️</div><div style="font-size:22px;font-weight:700;color:#a78bfa;">A+</div><div style="font-size:11px;color:var(--text-secondary);">Urban sustainability grade</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TAB 5: REPORTS ─── -->
+<div id="tab-reports" class="tab-content">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <div class="card-title">📋 Session History & Reports</div>
+    <div style="display:flex;gap:10px;"><button class="btn-secondary" onclick="exportCSV()">⬇️ Export CSV</button><button class="btn-primary" onclick="exportPDF()">📄 PDF Report</button></div>
+  </div>
+  <div class="card" style="margin-bottom:20px;"><div class="card-title" style="margin-bottom:16px;">📅 Recent Sessions</div><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Session ID</th><th>Date & Time</th><th>Duration</th><th>Total</th><th>Cars</th><th>Trucks</th><th>Buses</th><th>Motos</th><th>Peak Density</th><th>Sig. Efficiency</th><th>CO₂ Saved</th></tr></thead><tbody id="sessionsTbody"></tbody></table></div></div>
+  <div class="grid-2">
+    <div class="card"><div class="card-title" style="margin-bottom:12px;">📊 Weekly Summary</div><div class="chart-container-lg"><canvas id="weeklyChart"></canvas></div></div>
+    <div class="card"><div class="card-title" style="margin-bottom:12px;">📋 Activity Log</div><div style="max-height:280px;overflow-y:auto;" id="activityLog"></div></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
